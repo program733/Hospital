@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import NavBar from "./components/NavBar";
 import Dashboard from "./pages/Dashboard";
@@ -12,10 +12,19 @@ import Bills from "./pages/Bills";
 import Staff from "./pages/Staff";
 
 export default function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
   return (
     <div className="app">
-      <NavBar />
-      <main className="main-content">
+      <NavBar isOpen={sidebarOpen} />
+      <main className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+        <button className="sidebar-toggle" onClick={toggleSidebar}>
+          {sidebarOpen ? '☰' : '☰'}
+        </button>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/admin" element={<Admin />} />

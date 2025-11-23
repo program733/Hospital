@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 
-export default function NavBar() {
+export default function NavBar({ isOpen }) {
   const location = useLocation();
 
   const navItems = [
@@ -17,9 +17,9 @@ export default function NavBar() {
   ];
 
   return (
-    <nav className="sidebar-nav">
+    <nav className={`sidebar-nav ${isOpen ? 'open' : 'closed'}`}>
       <div className="nav-header">
-        <h2>🏥 HMS</h2>
+        <h2>{isOpen ? '🏥 Janta Hospital' : '🏥'}</h2>
       </div>
       <ul className="nav-list">
         {navItems.map((item) => (
@@ -27,9 +27,10 @@ export default function NavBar() {
             <Link
               to={item.to}
               className={location.pathname === item.to ? "active" : ""}
+              title={item.label}
             >
               <span className={item.icon}></span>
-              {item.label}
+              {isOpen && item.label}
             </Link>
           </li>
         ))}

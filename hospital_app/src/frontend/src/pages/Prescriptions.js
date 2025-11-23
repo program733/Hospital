@@ -15,18 +15,30 @@ export default function Prescriptions() {
   const [patientId, setPatientId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [selectedMedicines, setSelectedMedicines] = useState([]);
-  const [instructions, setInstructions] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState("");
+
+  // Medicine search
+  const [medicineSearch, setMedicineSearch] = useState("");
+  const [showMedicineDropdown, setShowMedicineDropdown] = useState(false);
+
+  const instructionSuggestions = [
+    "Take 2 times a day after meals",
+    "Take 3 times a day before meals",
+    "Take once daily at bedtime",
+    "Take as needed for pain",
+    "Apply topically 2 times daily",
+    "Take 1 tablet every 6 hours",
+  ];
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [presRes, patRes, docRes, medRes] = await Promise.all([
-          api.get("/prescriptions"),
-          api.get("/patients"),
-          api.get("/doctors"),
-          api.get("/medicines"),
+          api.get("/prescriptions/"),
+          api.get("/patients/"),
+          api.get("/doctors/"),
+          api.get("/medicines/"),
         ]);
         const pres = Array.isArray(presRes.data) ? presRes.data : [];
         setPrescriptions(pres);
@@ -64,24 +76,35 @@ export default function Prescriptions() {
     setPatientId("");
     setDoctorId("");
     setSelectedMedicines([]);
-    setInstructions("");
+    setMedicineSearch("");
   };
 
-  const handleMedicineChange = (medicineId, quantity) => {
-    const medId = parseInt(medicineId, 10);
-    const qty = parseInt(quantity, 10);
-    setSelectedMedicines((prev) => {
-      const existing = prev.find((m) => m.medicine_id === medId);
-      if (existing) {
-        return prev.map((m) => (m.medicine_id === medId ? { ...m, quantity: qty } : m));
-      } else {
-        return [...prev, { medicine_id: medId, quantity: qty }];
-      }
-    });
+  const addMedicine = (medicine) => {
+    const existing = selectedMedicines.find(m => m.medicine_id === medicine.id);
+    if (existing) {
+      setError("Medicine already added");
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+    setSelectedMedicines(prev => [...prev, {
+      medicine_id: medicine.id,
+      medicine_name: medicine.name,
+      quantity: 1,
+      instruction: "Take 2 times a day after meals",
+      price: medicine.price
+    }]);
+    setMedicineSearch("");
+    setShowMedicineDropdown(false);
+  };
+
+  const updateMedicine = (medicineId, field, value) => {
+    setSelectedMedicines(prev =>
+      prev.map(m => m.medicine_id === medicineId ? { ...m, [field]: value } : m)
+    );
   };
 
   const removeMedicine = (medicineId) => {
-    setSelectedMedicines((prev) => prev.filter((m) => m.medicine_id !== medicineId));
+    setSelectedMedicines(prev => prev.filter(m => m.medicine_id !== medicineId));
   };
 
   const handleSubmit = async (e) => {
@@ -90,34 +113,29 @@ export default function Prescriptions() {
     setOkMessage(null);
 
     if (!patientId || !doctorId || selectedMedicines.length === 0) {
-      setError("Patient, Doctor, and at least one medicine are required.");
-      return;
-    }
-
-    // Filter out medicines with empty medicine_id
-    const validMedicines = selectedMedicines.filter(med => med.medicine_id && med.medicine_id !== "");
-
-    if (validMedicines.length === 0) {
-      setError("At least one valid medicine must be selected.");
+      setError("Please fill all required fields");
       return;
     }
 
     const payload = {
       patient_id: parseInt(patientId, 10),
       doctor_id: parseInt(doctorId, 10),
-      instructions: instructions.trim() || null,
-      medicines: validMedicines,
+      instructions: selectedMedicines.map(m => `${m.medicine_name}: ${m.instruction}`).join("; "),
+      medicines: selectedMedicines.map(m => ({
+        medicine_id: m.medicine_id,
+        quantity: parseInt(m.quantity) || 1
+      })),
     };
 
     try {
       setSubmitting(true);
-      const res = await api.post("/prescriptions", payload);
+      const res = await api.post("/prescriptions/", payload);
       const created = res.data;
-      setPrescriptions((prev) => [created, ...prev]);
-      setFiltered((prev) => [created, ...prev]);
+      setPrescriptions(prev => [created, ...prev]);
+      setFiltered(prev => [created, ...prev]);
       resetForm();
-      setOkMessage("Prescription created successfully.");
-      setTimeout(() => setOkMessage(null), 3500);
+      setOkMessage("✓ Prescription created");
+      setTimeout(() => setOkMessage(null), 3000);
     } catch (err) {
       let errorMsg = "Failed to create prescription";
       if (err.response?.data?.detail) {
@@ -136,36 +154,54 @@ export default function Prescriptions() {
   };
 
   const getPatientName = (id) => {
-    const p = patients.find((pat) => pat.id === id);
+    const p = patients.find(pat => pat.id === id);
     return p ? p.name : `Patient ${id}`;
   };
 
   const getDoctorName = (id) => {
-    const d = doctors.find((doc) => doc.id === id);
+    const d = doctors.find(doc => doc.id === id);
     return d ? d.name : `Doctor ${id}`;
   };
 
   const getMedicineName = (id) => {
-    const m = medicines.find((med) => med.id === id);
+    const m = medicines.find(med => med.id === id);
     return m ? m.name : `Medicine ${id}`;
   };
 
+  const filteredMedicines = medicines.filter(m =>
+    m.name.toLowerCase().includes(medicineSearch.toLowerCase())
+  );
+
+  const totalCost = selectedMedicines.reduce((sum, m) => sum + (m.price * m.quantity), 0);
+
   return (
     <div className="page prescriptions-page">
-      <header className="hero">
-        <div>
-          <h1>📋 Hospital Management — Prescriptions</h1>
-          <p className="hero-sub">Create and manage patient prescriptions</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>📋 Prescriptions</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Create and manage patient prescriptions</p>
+         </div>
+       </header>
 
       <div className="content-grid">
         <aside className="card form-card">
           <h3>Create Prescription</h3>
           <form onSubmit={handleSubmit} className="prescription-form">
-            <label>
-              Patient <span className="muted">*</span>
-              <select value={patientId} onChange={(e) => setPatientId(e.target.value)}>
+            <label className="full-width">
+              Doctor
+              <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
+                <option value="">Select Doctor</option>
+                {doctors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} - {d.specialization}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="full-width">
+              Patient
+              <select value={patientId} onChange={(e) => setPatientId(e.target.value)} required>
                 <option value="">Select Patient</option>
                 {patients.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -175,69 +211,85 @@ export default function Prescriptions() {
               </select>
             </label>
 
-            <label>
-              Doctor <span className="muted">*</span>
-              <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
-                <option value="">Select Doctor</option>
-                {doctors.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} - {d.specialization} (ID: {d.id})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="full-width medicine-section">
+              <h4>Add Medicines</h4>
 
-            <label>
-              Instructions
-              <textarea
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Dosage instructions, e.g. Take 2 tablets daily"
-                rows="3"
-              />
-            </label>
+              <div className="medicine-search-wrapper">
+                <input
+                  type="text"
+                  placeholder="Search medicine..."
+                  value={medicineSearch}
+                  onChange={(e) => {
+                    setMedicineSearch(e.target.value);
+                    setShowMedicineDropdown(true);
+                  }}
+                  onFocus={() => setShowMedicineDropdown(true)}
+                />
 
-            <div>
-              <h4>Medicines <span className="muted">*</span></h4>
+                {showMedicineDropdown && medicineSearch && (
+                  <div className="medicine-dropdown">
+                    {filteredMedicines.length > 0 ? (
+                      filteredMedicines.slice(0, 10).map(medicine => (
+                        <div
+                          key={medicine.id}
+                          className="medicine-option"
+                          onClick={() => addMedicine(medicine)}
+                        >
+                          <div>
+                            <strong>{medicine.name}</strong>
+                            <small className="muted"> - Stock: {medicine.stock}</small>
+                          </div>
+                          <span className="medicine-price">${medicine.price}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="medicine-option disabled">No medicines found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {selectedMedicines.map((med) => (
-                <div key={med.medicine_id} className="row" style={{ marginBottom: "0.5rem" }}>
-                  <select
-                    value={med.medicine_id}
-                    onChange={(e) => handleMedicineChange(e.target.value, med.quantity)}
-                  >
-                    <option value="">Select Medicine</option>
-                    {medicines.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                <div key={med.medicine_id} className="medicine-row">
+                  <div>
+                    <strong>{med.medicine_name}</strong>
+                  </div>
                   <input
                     type="number"
                     min="1"
                     value={med.quantity}
-                    onChange={(e) => handleMedicineChange(med.medicine_id, e.target.value)}
+                    onChange={(e) => updateMedicine(med.medicine_id, 'quantity', e.target.value)}
                     placeholder="Qty"
                   />
+                  <select
+                    value={med.instruction}
+                    onChange={(e) => updateMedicine(med.medicine_id, 'instruction', e.target.value)}
+                  >
+                    {instructionSuggestions.map((suggestion, idx) => (
+                      <option key={idx} value={suggestion}>
+                        {suggestion}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
-                    className="btn danger"
+                    className="remove-btn"
                     onClick={() => removeMedicine(med.medicine_id)}
+                    title="Remove"
                   >
-                    Remove
+                    ×
                   </button>
                 </div>
               ))}
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => setSelectedMedicines((prev) => [...prev, { medicine_id: "", quantity: 1 }])}
-              >
-                Add Medicine
-              </button>
+
+              {selectedMedicines.length > 0 && (
+                <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#f0f8ff', borderRadius: '4px' }}>
+                  <strong>Total Cost: ${totalCost}</strong>
+                </div>
+              )}
             </div>
 
-            <div className="form-actions">
+            <div className="form-actions full-width">
               <button className="btn primary" type="submit" disabled={submitting}>
                 {submitting ? "Creating..." : "Create Prescription"}
               </button>
@@ -246,9 +298,8 @@ export default function Prescriptions() {
               </button>
             </div>
 
-            {error && <div className="alert error">{error}</div>}
-            {okMessage && <div className="alert success">{okMessage}</div>}
-            <p className="footnote">Required fields marked with *</p>
+            {error && <div className="alert error compact">{error}</div>}
+            {okMessage && <div className="alert success compact">{okMessage}</div>}
           </form>
         </aside>
 
@@ -258,7 +309,7 @@ export default function Prescriptions() {
             <div>
               <input
                 className="search"
-                placeholder="Search by ID, patient, doctor or instructions..."
+                placeholder="Search prescriptions..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -293,7 +344,7 @@ export default function Prescriptions() {
                           ? p.medicines.map((m) => `${getMedicineName(m.medicine_id)} (${m.quantity})`).join(", ")
                           : "—"}
                       </td>
-                      <td>{p.instructions ?? "—"}</td>
+                      <td className="instruction-cell">{p.instructions ?? "—"}</td>
                       <td>{p.prescription_date ? new Date(p.prescription_date).toLocaleDateString() : "—"}</td>
                     </tr>
                   ))}

@@ -13,6 +13,8 @@ export default function Doctors() {
   const [specialization, setSpecialization] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
+  const [consultationFee, setConsultationFee] = useState("500");
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -52,6 +54,17 @@ export default function Doctors() {
     setSpecialization("");
     setContact("");
     setEmail("");
+    setConsultationFee("500");
+    setEditingId(null);
+  };
+
+  const handleEdit = (doctor) => {
+    setEditingId(doctor.id);
+    setName(doctor.name);
+    setSpecialization(doctor.specialization || "");
+    setContact(doctor.contact_number);
+    setEmail(doctor.email);
+    setConsultationFee(doctor.consultation_fee || "500");
   };
 
   const handleSubmit = async (e) => {
@@ -69,19 +82,28 @@ export default function Doctors() {
       specialization: specialization.trim() || null,
       contact_number: contact.trim(),
       email: email.trim(),
+      consultation_fee: parseInt(consultationFee, 10) || 500,
     };
 
     try {
       setSubmitting(true);
-      const res = await api.post("/doctors", payload);
-      const created = res.data;
-      setDoctors((prev) => [created, ...prev]);
-      setFiltered((prev) => [created, ...prev]);
+      let res;
+      if (editingId) {
+        res = await api.put(`/doctors/${editingId}`, payload);
+        setDoctors((prev) => prev.map((d) => (d.id === editingId ? res.data : d)));
+        setFiltered((prev) => prev.map((d) => (d.id === editingId ? res.data : d)));
+        setOkMessage("Doctor updated successfully.");
+      } else {
+        res = await api.post("/doctors", payload);
+        const created = res.data;
+        setDoctors((prev) => [created, ...prev]);
+        setFiltered((prev) => [created, ...prev]);
+        setOkMessage("Doctor added successfully.");
+      }
       resetForm();
-      setOkMessage("Doctor added successfully.");
       setTimeout(() => setOkMessage(null), 3500);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to add doctor");
+      setError(err.response?.data?.detail || err.message || "Failed to save doctor");
     } finally {
       setSubmitting(false);
     }
@@ -89,16 +111,16 @@ export default function Doctors() {
 
   return (
     <div className="page doctors-page">
-      <header className="hero">
-        <div>
-          <h1>👨‍⚕️ Hospital Management — Doctors</h1>
-          <p className="hero-sub">Register new doctors and view doctor records</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>👨‍⚕️ Doctors</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Register new doctors and view doctor records</p>
+         </div>
+       </header>
 
       <div className="content-grid">
         <aside className="card form-card">
-          <h3>Add Doctor</h3>
+          <h3>{editingId ? "Edit Doctor" : "Add Doctor"}</h3>
           <form onSubmit={handleSubmit} className="doctor-form">
             <label>
               Name <span className="muted">*</span>
@@ -111,8 +133,20 @@ export default function Doctors() {
             </label>
 
             <label>
+              Consultation Fee
+              <input
+                type="number"
+                min="0"
+                value={consultationFee}
+                onChange={(e) => setConsultationFee(e.target.value)}
+                placeholder="e.g. 500"
+              />
+            </label>
+
+            <label>
               Contact Number <span className="muted">*</span>
-              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="+1-555-555-5555" />
+              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="+91 9876543210" />
+              <small className="muted">Format: +91 XXXXX XXXXX</small>
             </label>
 
             <label>
@@ -122,10 +156,10 @@ export default function Doctors() {
 
             <div className="form-actions">
               <button className="btn primary" type="submit" disabled={submitting}>
-                {submitting ? "Adding..." : "Add Doctor"}
+                {submitting ? "Saving..." : (editingId ? "Update Doctor" : "Add Doctor")}
               </button>
               <button className="btn" type="button" onClick={resetForm} disabled={submitting}>
-                Reset
+                {editingId ? "Cancel" : "Reset"}
               </button>
             </div>
 
@@ -160,8 +194,10 @@ export default function Doctors() {
                     <th>ID</th>
                     <th>Name</th>
                     <th>Specialization</th>
+                    <th>Fee</th>
                     <th>Contact</th>
                     <th>Email</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,8 +206,12 @@ export default function Doctors() {
                       <td className="mono">{d.id}</td>
                       <td>{d.name}</td>
                       <td>{d.specialization ?? "—"}</td>
+                      <td>${d.consultation_fee ?? 500}</td>
                       <td>{d.contact_number ?? "—"}</td>
                       <td>{d.email ?? "—"}</td>
+                      <td>
+                        <button className="btn secondary" onClick={() => handleEdit(d)}>Edit</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

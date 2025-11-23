@@ -92,12 +92,12 @@ export default function Staff() {
 
   return (
     <div className="page staff-page">
-      <header className="hero">
-        <div>
-          <h1>👥 Hospital Management — Staff</h1>
-          <p className="hero-sub">Manage hospital staff members</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>👥 Staff</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Manage hospital staff members</p>
+         </div>
+       </header>
 
       <div className="content-grid">
         <aside className="card form-card">
@@ -120,7 +120,8 @@ export default function Staff() {
 
             <label>
               Contact Number <span className="muted">*</span>
-              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="+1-555-555-5555" />
+              <input value={contact} onChange={(e) => setContact(e.target.value)} placeholder="+91 9876543210" />
+              <small className="muted">Format: +91 XXXXX XXXXX</small>
             </label>
 
             <label>

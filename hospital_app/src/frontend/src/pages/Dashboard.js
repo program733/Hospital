@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [recentPatients, setRecentPatients] = useState([]);
   const [recentAppointments, setRecentAppointments] = useState([]);
+  const [lowStockMedicines, setLowStockMedicines] = useState([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -27,6 +28,7 @@ export default function Dashboard() {
           prescriptionsRes,
           billsRes,
           staffRes,
+          lowStockRes,
         ] = await Promise.all([
           api.get("/patients"),
           api.get("/doctors"),
@@ -35,6 +37,7 @@ export default function Dashboard() {
           api.get("/prescriptions"),
           api.get("/bills"),
           api.get("/staff"),
+          api.get("/medicines/low-stock"),
         ]);
 
         setStats({
@@ -52,6 +55,9 @@ export default function Dashboard() {
 
         // Get recent appointments (last 5)
         setRecentAppointments(appointmentsRes.data.slice(-5).reverse());
+
+        // Set low stock medicines
+        setLowStockMedicines(lowStockRes.data);
       } catch (err) {
         setError("Failed to load dashboard stats");
       } finally {
@@ -67,12 +73,12 @@ export default function Dashboard() {
 
   return (
     <div className="page dashboard-page">
-      <header className="hero">
-        <div>
-          <h1>🏥 Hospital Management Dashboard</h1>
-          <p className="hero-sub">Overview of hospital operations and statistics</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>🏥 Dashboard</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Overview of hospital operations and statistics</p>
+         </div>
+       </header>
 
       <div className="dashboard-grid">
         <div className="stat-card">
@@ -104,6 +110,20 @@ export default function Dashboard() {
           <p>Staff Members</p>
         </div>
       </div>
+
+      {lowStockMedicines.length > 0 && (
+        <div className="alert warning" style={{ margin: "20px 0" }}>
+          <h3>⚠️ Low Stock Alert</h3>
+          <p>The following medicines are running low on stock:</p>
+          <ul>
+            {lowStockMedicines.map((med) => (
+              <li key={med.id}>
+                <strong>{med.name}</strong>: {med.stock} remaining (Threshold: {med.low_stock_threshold})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="dashboard-content">
         <div className="card">

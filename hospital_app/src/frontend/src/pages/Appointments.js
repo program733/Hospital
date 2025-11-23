@@ -73,29 +73,37 @@ export default function Appointments() {
     setOkMessage(null);
 
     if (!patientId || !doctorId || !appointmentTime) {
-      setError("Patient, Doctor, and Appointment Time are required.");
+      setError("Please fill all required fields");
+      return;
+    }
+
+    // Ensure proper datetime format
+    const appointmentDate = new Date(appointmentTime);
+    if (isNaN(appointmentDate.getTime())) {
+      setError("Invalid appointment time");
       return;
     }
 
     const payload = {
       patient_id: parseInt(patientId, 10),
       doctor_id: parseInt(doctorId, 10),
-      appointment_time: new Date(appointmentTime).toISOString(),
-      reason: reason.trim() || null,
+      appointment_time: appointmentDate.toISOString(),
+      reason: reason.trim() || "",
       status: status,
     };
 
     try {
       setSubmitting(true);
-      const res = await api.post("/appointments", payload);
+      const res = await api.post("/appointments/", payload);
       const created = res.data;
       setAppointments((prev) => [created, ...prev]);
       setFiltered((prev) => [created, ...prev]);
       resetForm();
-      setOkMessage("Appointment scheduled successfully.");
-      setTimeout(() => setOkMessage(null), 3500);
+      setOkMessage("✓ Appointment scheduled");
+      setTimeout(() => setOkMessage(null), 3000);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to schedule appointment");
+      const errorMsg = err.response?.data?.detail || err.message || "Failed to schedule appointment";
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setSubmitting(false);
     }
@@ -113,20 +121,20 @@ export default function Appointments() {
 
   return (
     <div className="page appointments-page">
-      <header className="hero">
-        <div>
-          <h1>📅 Hospital Management — Appointments</h1>
-          <p className="hero-sub">Schedule and manage patient appointments</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>📅 Appointments</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Schedule and manage patient appointments</p>
+         </div>
+       </header>
 
       <div className="content-grid">
         <aside className="card form-card">
           <h3>Schedule Appointment</h3>
           <form onSubmit={handleSubmit} className="appointment-form">
             <label>
-              Patient <span className="muted">*</span>
-              <select value={patientId} onChange={(e) => setPatientId(e.target.value)}>
+              Patient
+              <select value={patientId} onChange={(e) => setPatientId(e.target.value)} required>
                 <option value="">Select Patient</option>
                 {patients.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -137,8 +145,8 @@ export default function Appointments() {
             </label>
 
             <label>
-              Doctor <span className="muted">*</span>
-              <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+              Doctor
+              <select value={doctorId} onChange={(e) => setDoctorId(e.target.value)} required>
                 <option value="">Select Doctor</option>
                 {doctors.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -149,11 +157,12 @@ export default function Appointments() {
             </label>
 
             <label>
-              Appointment Time <span className="muted">*</span>
+              Appointment Time
               <input
                 type="datetime-local"
                 value={appointmentTime}
                 onChange={(e) => setAppointmentTime(e.target.value)}
+                required
               />
             </label>
 
@@ -171,7 +180,7 @@ export default function Appointments() {
               </select>
             </label>
 
-            <div className="form-actions">
+            <div className="form-actions full-width">
               <button className="btn primary" type="submit" disabled={submitting}>
                 {submitting ? "Scheduling..." : "Schedule Appointment"}
               </button>
@@ -180,9 +189,8 @@ export default function Appointments() {
               </button>
             </div>
 
-            {error && <div className="alert error">{error}</div>}
-            {okMessage && <div className="alert success">{okMessage}</div>}
-            <p className="footnote">Required fields marked with *</p>
+            {error && <div className="alert error compact">{error}</div>}
+            {okMessage && <div className="alert success compact">{okMessage}</div>}
           </form>
         </aside>
 

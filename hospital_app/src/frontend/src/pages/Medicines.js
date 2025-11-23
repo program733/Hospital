@@ -19,6 +19,7 @@ export default function Medicines() {
   const [lowStockThreshold, setLowStockThreshold] = useState("10");
   const [category, setCategory] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -78,6 +79,21 @@ export default function Medicines() {
     setLowStockThreshold("10");
     setCategory("");
     setSupplier("");
+    setEditingId(null);
+  };
+
+  const handleEdit = (medicine) => {
+    setEditingId(medicine.id);
+    setName(medicine.name);
+    setDescription(medicine.description || "");
+    setStock(medicine.stock);
+    setPrice(medicine.price);
+    setExpiryDate(medicine.expiry_date ? medicine.expiry_date.split('T')[0] : "");
+    setBatchNumber(medicine.batch_number);
+    setManufactureDate(medicine.manufacture_date ? medicine.manufacture_date.split('T')[0] : "");
+    setLowStockThreshold(medicine.low_stock_threshold || "10");
+    setCategory(medicine.category);
+    setSupplier(medicine.supplier);
   };
 
   const handleSubmit = async (e) => {
@@ -105,15 +121,23 @@ export default function Medicines() {
 
     try {
       setSubmitting(true);
-      const res = await api.post("/medicines", payload);
-      const created = res.data;
-      setMedicines((prev) => [created, ...prev]);
-      setFiltered((prev) => [created, ...prev]);
+      let res;
+      if (editingId) {
+        res = await api.put(`/medicines/${editingId}`, payload);
+        setMedicines((prev) => prev.map((m) => (m.id === editingId ? res.data : m)));
+        setFiltered((prev) => prev.map((m) => (m.id === editingId ? res.data : m)));
+        setOkMessage("Medicine updated successfully.");
+      } else {
+        res = await api.post("/medicines", payload);
+        const created = res.data;
+        setMedicines((prev) => [created, ...prev]);
+        setFiltered((prev) => [created, ...prev]);
+        setOkMessage("Medicine added successfully.");
+      }
       resetForm();
-      setOkMessage("Medicine added successfully.");
       setTimeout(() => setOkMessage(null), 3500);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to add medicine");
+      setError(err.response?.data?.detail || err.message || "Failed to save medicine");
     } finally {
       setSubmitting(false);
     }
@@ -121,31 +145,19 @@ export default function Medicines() {
 
   return (
     <div className="page medicines-page">
-      <header className="hero">
-        <div>
-          <h1>💊 Hospital Management — Medicines</h1>
-          <p className="hero-sub">Manage medicine inventory and stock levels</p>
-        </div>
-      </header>
+       <header className="hero" style={{ padding: '5px 10px' }}>
+         <div>
+           <h3 style={{ margin: 0, fontSize: '1.2em' }}>💊 Medicines</h3>
+           <p className="hero-sub" style={{ margin: '2px 0 0', fontSize: '0.85em' }}>Manage medicine inventory and stock levels</p>
+         </div>
+       </header>
 
       <div className="content-grid">
-        <aside className="card alerts-card">
-          <h3>⚠️ Inventory Alerts</h3>
-          <div className="alerts-section">
-            <div className="alert low-stock-alert">
-              <strong>Low Stock Items:</strong> Medicines below threshold
-            </div>
-            <div className="alert expiring-alert">
-              <strong>Expiring Soon:</strong> Medicines expiring within 30 days
-            </div>
-          </div>
-        </aside>
-
         <aside className="card form-card">
-          <h3>Add Medicine</h3>
+          <h3>{editingId ? "Edit Medicine" : "Add Medicine"}</h3>
           <form onSubmit={handleSubmit} className="medicine-form">
             <label>
-              Name <span className="muted">*</span>
+              Name
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Medicine name" />
             </label>
 
@@ -161,7 +173,7 @@ export default function Medicines() {
 
             <div className="row">
               <label>
-                Stock <span className="muted">*</span>
+                Stock
                 <input
                   type="number"
                   min="0"
@@ -172,7 +184,7 @@ export default function Medicines() {
               </label>
 
               <label>
-                Price <span className="muted">*</span>
+                Price
                 <input
                   type="number"
                   min="0"
@@ -184,7 +196,7 @@ export default function Medicines() {
             </div>
 
             <label>
-              Expiry Date <span className="muted">*</span>
+              Expiry Date
               <input
                 type="date"
                 value={expiryDate}
@@ -194,7 +206,7 @@ export default function Medicines() {
 
             <div className="row">
               <label>
-                Batch Number <span className="muted">*</span>
+                Batch Number
                 <input
                   value={batchNumber}
                   onChange={(e) => setBatchNumber(e.target.value)}
@@ -203,7 +215,7 @@ export default function Medicines() {
               </label>
 
               <label>
-                Manufacture Date <span className="muted">*</span>
+                Manufacture Date
                 <input
                   type="date"
                   value={manufactureDate}
@@ -225,7 +237,7 @@ export default function Medicines() {
               </label>
 
               <label>
-                Category <span className="muted">*</span>
+                Category
                 <input
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -235,7 +247,7 @@ export default function Medicines() {
             </div>
 
             <label>
-              Supplier <span className="muted">*</span>
+              Supplier
               <input
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
@@ -245,10 +257,10 @@ export default function Medicines() {
 
             <div className="form-actions">
               <button className="btn primary" type="submit" disabled={submitting}>
-                {submitting ? "Adding..." : "Add Medicine"}
+                {submitting ? "Saving..." : (editingId ? "Update Medicine" : "Add Medicine")}
               </button>
               <button className="btn" type="button" onClick={resetForm} disabled={submitting}>
-                Reset
+                {editingId ? "Cancel" : "Reset"}
               </button>
             </div>
 
@@ -298,8 +310,10 @@ export default function Medicines() {
                     <th>Batch</th>
                     <th>Stock</th>
                     <th>Price</th>
-                    <th>Expiry Date</th>
+                    <th>Expiry</th>
+                    <th>Mfg Date</th>
                     <th>Supplier</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -311,7 +325,10 @@ export default function Medicines() {
                     return (
                       <tr key={m.id} className={rowClass}>
                         <td className="mono">{m.id}</td>
-                        <td>{m.name}</td>
+                        <td>
+                          {m.name}
+                          {m.description && <div className="muted" style={{ fontSize: '0.8em' }}>{m.description}</div>}
+                        </td>
                         <td>{m.category ?? "—"}</td>
                         <td>{m.batch_number ?? "—"}</td>
                         <td className={isLowStock ? "low-stock" : ""}>{m.stock ?? "—"}</td>
@@ -319,7 +336,13 @@ export default function Medicines() {
                         <td className={isExpiringSoon ? "expiring-soon" : ""}>
                           {m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : "—"}
                         </td>
+                        <td>
+                          {m.manufacture_date ? new Date(m.manufacture_date).toLocaleDateString() : "—"}
+                        </td>
                         <td>{m.supplier ?? "—"}</td>
+                        <td>
+                          <button className="btn secondary" onClick={() => handleEdit(m)}>Edit</button>
+                        </td>
                       </tr>
                     );
                   })}

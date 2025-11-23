@@ -11,7 +11,7 @@ models.Base.metadata.create_all(bind=database.engine)
 app = FastAPI()
 
 origins = [
-    "http://localhost:3000",
+    "*",
 ]
 
 app.add_middleware(
@@ -26,9 +26,17 @@ app.add_middleware(
 class PatientBase(BaseModel):
     name: str
     age: int
-    gender: str
+    gender: Optional[str] = None
     contact_number: str
-    address: str
+    address: Optional[str] = None
+    aadhar_number: Optional[str] = None
+    blood_group: Optional[str] = None
+    dob: Optional[datetime.datetime] = None
+    email: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_number: Optional[str] = None
+    marital_status: Optional[str] = None
+    assigned_doctor_id: Optional[int] = None
 
 class PatientCreate(PatientBase):
     pass
@@ -36,7 +44,7 @@ class PatientCreate(PatientBase):
 class Patient(PatientBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Doctor Module
 class DoctorBase(BaseModel):
@@ -44,6 +52,7 @@ class DoctorBase(BaseModel):
     specialization: str
     contact_number: str
     email: str
+    consultation_fee: int = 500
 
 class DoctorCreate(DoctorBase):
     pass
@@ -51,7 +60,7 @@ class DoctorCreate(DoctorBase):
 class Doctor(DoctorBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Appointment Module
 class AppointmentBase(BaseModel):
@@ -67,7 +76,7 @@ class AppointmentCreate(AppointmentBase):
 class Appointment(AppointmentBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Medical Record Module
 class MedicalRecordBase(BaseModel):
@@ -83,7 +92,7 @@ class MedicalRecordCreate(MedicalRecordBase):
 class MedicalRecord(MedicalRecordBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Medicine Module
 class MedicineBase(BaseModel):
@@ -104,7 +113,7 @@ class MedicineCreate(MedicineBase):
 class Medicine(MedicineBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Prescription Module
 class PrescriptionBase(BaseModel):
@@ -112,6 +121,7 @@ class PrescriptionBase(BaseModel):
     doctor_id: int
     prescription_date: Optional[datetime.datetime] = None
     instructions: Optional[str] = None
+    status: str = "Pending"
 
 class PrescriptionCreate(PrescriptionBase):
     medicines: list[dict]  # List of {medicine_id: int, quantity: int}
@@ -120,7 +130,7 @@ class Prescription(PrescriptionBase):
     id: int
     medicines: Optional[list] = None
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Prescription Medicine Link
 class PrescriptionMedicineBase(BaseModel):
@@ -133,7 +143,7 @@ class PrescriptionMedicineCreate(PrescriptionMedicineBase):
 
 class PrescriptionMedicine(PrescriptionMedicineBase):
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Bill Module
 class BillBase(BaseModel):
@@ -148,8 +158,9 @@ class BillCreate(BillBase):
 class Bill(BillBase):
     id: int
     amount: int
+    paid_amount: Optional[int] = 0
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for User Module (for RBAC)
 class UserBase(BaseModel):
@@ -164,7 +175,7 @@ class User(UserBase):
     id: int
     hashed_password: str # Only return hashed password
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Pydantic Models for Staff Module
 class StaffBase(BaseModel):
@@ -180,7 +191,23 @@ class StaffCreate(StaffBase):
 class Staff(StaffBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+# Pydantic Models for Payment Module
+class PaymentBase(BaseModel):
+    bill_id: int
+    amount: int
+    payment_method: str
+    notes: Optional[str] = None
+
+class PaymentCreate(PaymentBase):
+    pass
+
+class Payment(PaymentBase):
+    id: int
+    payment_date: datetime.datetime
+    class Config:
+        from_attributes = True
 
 def get_db():
     db = database.SessionLocal()
@@ -192,11 +219,20 @@ def get_db():
 # API Endpoints for Patient Module
 @app.post("/patients/", response_model=Patient)
 def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
-    db_patient = models.Patient(**patient.dict())
-    db.add(db_patient)
-    db.commit()
-    db.refresh(db_patient)
-    return db_patient
+    try:
+        db_patient = models.Patient(**patient.dict())
+        db.add(db_patient)
+        db.commit()
+        db.refresh(db_patient)
+        return db_patient
+    except Exception as e:
+        db.rollback()
+        if "UNIQUE constraint failed" in str(e):
+            if "aadhar_number" in str(e) or "patients.aadhar_number" in str(e):
+                raise HTTPException(status_code=400, detail="Patient with this Aadhar Number already exists.")
+            # Fallback for other unique constraints if any
+            raise HTTPException(status_code=400, detail="Duplicate entry detected.")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/patients/", response_model=list[Patient])
 def read_patients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -547,9 +583,13 @@ def create_bill(bill: BillCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Patient not found")
 
     total_amount = 0
+    medicines_to_update = []
 
-    # Get all prescriptions for the patient
-    prescriptions = db.query(models.Prescription).filter(models.Prescription.patient_id == bill.patient_id).all()
+    # Get all pending prescriptions for the patient
+    prescriptions = db.query(models.Prescription).filter(
+        models.Prescription.patient_id == bill.patient_id,
+        models.Prescription.status == "Pending"
+    ).all()
 
     for prescription in prescriptions:
         # Get medicines for each prescription
@@ -560,11 +600,29 @@ def create_bill(bill: BillCreate, db: Session = Depends(get_db)):
         for pm in prescription_medicines:
             medicine = db.query(models.Medicine).filter(models.Medicine.id == pm.medicine_id).first()
             if medicine:
+                if medicine.stock < pm.quantity:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Insufficient stock for medicine: {medicine.name}. Available: {medicine.stock}, Required: {pm.quantity}"
+                    )
                 total_amount += medicine.price * pm.quantity
+                medicines_to_update.append((medicine, pm.quantity))
 
-    # Add consultation fee (fixed amount, e.g., 500)
-    consultation_fee = 500
-    total_amount += consultation_fee
+    # Deduct stock
+    for medicine, quantity in medicines_to_update:
+        medicine.stock -= quantity
+
+    # Mark prescriptions as Billed and add doctor's consultation fee
+    for prescription in prescriptions:
+        prescription.status = "Billed"
+        
+        # Add consultation fee for the doctor who prescribed
+        doctor = db.query(models.Doctor).filter(models.Doctor.id == prescription.doctor_id).first()
+        if doctor:
+            total_amount += doctor.consultation_fee
+        else:
+            # Fallback if doctor not found (shouldn't happen ideally)
+            total_amount += 500
 
     # Create bill with calculated amount
     bill_data = bill.dict()
@@ -693,3 +751,37 @@ def delete_staff(staff_id: int, db: Session = Depends(get_db)):
     db.delete(db_staff)
     db.commit()
     return db_staff
+
+# API Endpoints for Payment Module
+@app.post("/payments/", response_model=Payment)
+def create_payment(payment: PaymentCreate, db: Session = Depends(get_db)):
+    # Create payment record
+    db_payment = models.Payment(**payment.dict())
+    db.add(db_payment)
+    
+    # Update bill's paid_amount
+    bill = db.query(models.Bill).filter(models.Bill.id == payment.bill_id).first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    bill.paid_amount = (bill.paid_amount or 0) + payment.amount
+    
+    # Update bill status
+    if bill.paid_amount >= bill.amount:
+        bill.status = "Paid"
+    elif bill.paid_amount > 0:
+        bill.status = "Partial"
+    
+    db.commit()
+    db.refresh(db_payment)
+    return db_payment
+
+@app.get("/payments/", response_model=list[Payment])
+def read_payments(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    payments = db.query(models.Payment).offset(skip).limit(limit).all()
+    return payments
+
+@app.get("/payments/bill/{bill_id}", response_model=list[Payment])
+def get_payments_by_bill(bill_id: int, db: Session = Depends(get_db)):
+    payments = db.query(models.Payment).filter(models.Payment.bill_id == bill_id).all()
+    return payments
